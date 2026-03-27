@@ -1,0 +1,6 @@
+---
+- name: Setup Jenkins Lab
+  hosts: jenkins
+  become: true
+  roles:
+    - jenkins
