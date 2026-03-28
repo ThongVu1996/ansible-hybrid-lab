@@ -1,6 +1,6 @@
 resource "tailscale_tailnet_key" "jenkins_key" {
   reusable      = false
-  ephemeral     = true
+  ephemeral     = false # Chuyển sang false để máy ảo không bị xóa khỏi Tailscale khi offline
   preauthorized = true
   expiry        = 3600
   tags          = ["tag:jenkins"]
@@ -27,6 +27,7 @@ resource "proxmox_virtual_environment_file" "jenkins_config" {
     data      = <<-EOF
       #cloud-config
       ssh_fp_console: false
+      hostname: jenkins-lab-${count.index}
       output: { all: ">> /dev/ttyS0" }
 
       users:
@@ -52,8 +53,8 @@ resource "proxmox_virtual_environment_file" "jenkins_config" {
         - apt-get update -y
         - [ sh, -c, "curl -fsSL https://tailscale.com/install.sh | sh > /dev/ttyS0 2>&1" ]
 
-        - [ sh, -c, "echo '--- [2/3] Tu dong join vao Tailscale... ---' > /dev/ttyS0" ]
-        - [ sh, -c, "tailscale up --authkey=${tailscale_tailnet_key.jenkins_key.key} --hostname=jenkins-server --ssh --accept-dns=true > /dev/ttyS0 2>&1" ]
+        - [ sh, -c, "echo '--- [2/3] Tu dong join vao Tailscale voi unique hostname... ---' > /dev/ttyS0" ]
+        - [ sh, -c, "tailscale up --authkey=${tailscale_tailnet_key.jenkins_key.key} --hostname=jenkins-lab-${count.index} --ssh --accept-dns=true --accept-routes=true > /dev/ttyS0 2>&1" ]
 
         - [ sh, -c, "echo '=== VM READY FOR ANSIBLE ===' > /dev/ttyS0" ]
     EOF
@@ -62,7 +63,7 @@ resource "proxmox_virtual_environment_file" "jenkins_config" {
 
 # 3. Khởi tạo Máy ảo Jenkins
 resource "proxmox_virtual_environment_vm" "jenkins_node" {
-  name      = "vm-jenkins-lab"
+  name      = "vm-jenkins-lab-${count.index}"
   node_name = var.proxmox_node
   count     = var.vm_instance_count
 
