@@ -1,55 +1,108 @@
 ---
-- name: Install required packages
+# GIAI ĐOẠN 1: Cài đặt phần mềm cơ bản (Baseline)
+- name: Install dependencies
   apt:
     name:
       - ca-certificates
       - curl
       - gnupg
+      - lsb-release
       - python3-pip
+      - python3-setuptools
+      - python3-docker
     state: present
     update_cache: yes
 
-- name: Install Docker
-  shell: |
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
-    chmod a+r /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  args:
-    creates: /usr/bin/docker
+- name: Add Docker GPG apt Key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+    keyring: /etc/apt/keyrings/docker.gpg
 
+- name: Add Docker Repository
+  apt_repository:
+    repo: "deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+
+- name: Install Docker Engine & Plugins
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Add current user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+
+# GIAI ĐOẠN 2: Kiểm tra (Test Baseline)
+- name: Verify Docker service is running
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Test Docker Run (Hello World)
+  docker_container:
+    name: test_hello
+    image: hello-world
+    state: started
+  register: docker_test
+  failed_when: docker_test.container.State.Status != 'exited'
+  ignore_errors: no
+
+# GIAI ĐOẠN 3: Thiết lập cấu trúc & Jenkins
 - name: Create project directories
   file:
     path: "{{ item }}"
     state: directory
-    owner: iadmin
-    group: iadmin
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
     mode: '0755'
   loop:
-    - /home/iadmin/cicd-lab/setup/jenkins/agent
+    - "/home/{{ ansible_user }}/cicd-lab/setup/jenkins/agent"
     - /opt/jenkins/jenkins_home
     - /opt/jenkins/agent
 
-- name: Set permissions for Jenkins home
+- name: Set permissions for Jenkins home (Volume persistence)
   file:
     path: /opt/jenkins/jenkins_home
     owner: 1000
     group: 1000
     recurse: yes
 
-- name: Copy Dockerfiles and Compose
+- name: Copy Dockerfiles and Compose Templates
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
   loop:
-    - { src: 'docker-compose.yaml.j2', dest: '/home/iadmin/cicd-lab/setup/docker-compose.yaml' }
-    - { src: 'Dockerfile-jenkins.j2', dest: '/home/iadmin/cicd-lab/setup/jenkins/Dockerfile' }
-    - { src: 'Dockerfile-agent.j2', dest: '/home/iadmin/cicd-lab/setup/jenkins/agent/Dockerfile' }
+    - { src: 'docker-compose.yaml.j2', dest: "/home/{{ ansible_user }}/cicd-lab/setup/docker-compose.yaml" }
+    - { src: 'Dockerfile-jenkins.j2', dest: "/home/{{ ansible_user }}/cicd-lab/setup/jenkins/Dockerfile" }
+    - { src: 'Dockerfile-agent.j2', dest: "/home/{{ ansible_user }}/cicd-lab/setup/jenkins/agent/Dockerfile" }
 
-- name: Deploy Jenkins with Docker Compose
+- name: Build and Deploy Jenkins via Docker Compose
   community.docker.docker_compose_v2:
-    project_src: /home/iadmin/cicd-lab/setup
+    project_src: "/home/{{ ansible_user }}/cicd-lab/setup"
     state: present
     build: always
+
+- name: Wait for Jenkins to be ready
+  wait_for:
+    port: 8080
+    delay: 10
+    timeout: 300
+
+- name: Get Initial Jenkins Admin Password
+  shell: docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+  register: jenkins_pass
+  changed_when: false
+
+- name: Display Initial Password
+  debug:
+    msg: "Jenkins Initial Password: {{ jenkins_pass.stdout }}"
