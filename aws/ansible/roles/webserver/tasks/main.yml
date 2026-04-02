@@ -1,0 +1,190 @@
+- name: Install dependencies
+  apt:
+    name:
+      - software-properties-common
+      - curl
+      - unzip
+      - git
+      - netcat-openbsd
+    state: present
+    update_cache: yes
+
+- name: Add PHP PPA
+  apt_repository:
+    repo: ppa:ondrej/php
+    state: present
+
+- name: Install PHP 8.2 and Nginx
+  apt:
+    name:
+      - nginx
+      - php8.2-fpm
+      - php8.2-cli
+      - php8.2-mysql
+      - php8.2-xml
+      - php8.2-mbstring
+      - php8.2-curl
+      - php8.2-zip
+      - php8.2-bcmath
+    state: present
+    update_cache: yes
+
+- name: Create SWAP file
+  command: fallocate -l 2G /swapfile
+  args:
+    creates: /swapfile
+
+- name: Set permissions for SWAP file
+  file:
+    path: /swapfile
+    mode: '0600'
+
+- name: Make SWAP
+  command: mkswap /swapfile
+  when: ansible_swaptotal_mb == 0
+
+- name: Enable SWAP
+  command: swapon /swapfile
+  when: ansible_swaptotal_mb == 0
+
+- name: Add SWAP to fstab
+  mount:
+    path: none
+    src: /swapfile
+    fstype: swap
+    opts: sw
+    state: present
+
+- name: Install Composer
+  shell: |
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+  args:
+    creates: /usr/local/bin/composer
+
+- name: Ensure Composer is executable
+  file:
+    path: /usr/local/bin/composer
+    mode: '0755'
+
+- name: Install Tailscale
+  shell: curl -fsSL https://tailscale.com/install.sh | sh
+  args:
+    creates: /usr/bin/tailscale
+
+- name: Start Tailscale
+  shell: tailscale up --authkey={{ ts_key }} --hostname=web-server --ssh --accept-dns=true
+  register: tailscale_up
+  changed_when: "'already logged in' not in tailscale_up.stdout"
+
+- name: Setup SSH Deploy Key
+  copy:
+    content: "{{ ssh_private_key }}"
+    dest: /root/.ssh/id_rsa
+    mode: '0600'
+
+- name: Add Github to known_hosts
+  known_hosts:
+    name: github.com
+    key: "{{ lookup('pipe', 'ssh-keyscan github.com') }}"
+    state: present
+
+- name: Create App directory
+  file:
+    path: /home/ubuntu/app
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+
+- name: Clone Laravel repository
+  git:
+    repo: git@github.com:ThongVu1996/terraform-hybrid-lab-laravel-code.git
+    dest: /home/ubuntu/app
+    version: main
+    force: yes
+    key_file: /root/.ssh/id_rsa
+  become: yes
+  become_user: ubuntu
+
+- name: Install Composer dependencies
+  composer:
+    command: install
+    working_dir: /home/ubuntu/app
+    no_interaction: yes
+    optimize_autoloader: yes
+  become: yes
+  become_user: ubuntu
+
+- name: Copy .env file
+  copy:
+    src: /home/ubuntu/app/.env.example
+    dest: /home/ubuntu/app/.env
+    remote_src: yes
+    owner: ubuntu
+    group: ubuntu
+
+- name: Configure .env file
+  lineinfile:
+    path: /home/ubuntu/app/.env
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+  loop:
+    - { key: 'DB_CONNECTION', value: 'mysql' }
+    - { key: 'DB_HOST', value: '{{ db_host }}' }
+    - { key: 'DB_DATABASE', value: '{{ db_name }}' }
+    - { key: 'DB_USERNAME', value: '{{ db_user }}' }
+    - { key: 'DB_PASSWORD', value: '{{ db_pass }}' }
+
+- name: Generate Laravel key
+  command: php8.2 artisan key:generate
+  args:
+    chdir: /home/ubuntu/app
+  become: yes
+  become_user: ubuntu
+
+- name: Set permissions for Laravel
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    recurse: yes
+    mode: '0775'
+  loop:
+    - /home/ubuntu/app/storage
+    - /home/ubuntu/app/bootstrap/cache
+
+- name: Allow www-data access to ubuntu home
+  file:
+    path: /home/ubuntu
+    mode: 'o+x'
+
+- name: Deploy Nginx configuration
+  template:
+    src: laravel.conf.j2
+    dest: /etc/nginx/sites-available/laravel
+  notify: Restart Nginx
+
+- name: Enable Nginx site
+  file:
+    src: /etc/nginx/sites-available/laravel
+    dest: /etc/nginx/sites-enabled/laravel
+    state: link
+
+- name: Remove default Nginx site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart Nginx
+
+- name: Wait for Database connectivity
+  wait_for:
+    host: "{{ db_host }}"
+    port: 3306
+    timeout: 300
+
+- name: Run Laravel Migrations
+  command: php8.2 artisan migrate --force
+  args:
+    chdir: /home/ubuntu/app
+  become: yes
+  become_user: ubuntu

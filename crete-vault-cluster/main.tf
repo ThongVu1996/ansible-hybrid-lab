@@ -20,18 +20,7 @@ variable "tfc_organization" {
 variable "tfc_workspace" {
   type = string
 }
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-variable "tailscale_key" {
-  type      = string
-  sensitive = true
-}
-# variable "VAULT_TOKEN" {
-#   type      = string
-#   sensitive = true
-# }
+
 # --- PROVIDERS ---
 provider "hcp" {}
 
@@ -88,36 +77,36 @@ resource "vault_mount" "kvv2" {
 
 resource "vault_auth_backend" "approle" { type = "approle" }
 
-# resource "vault_policy" "jenkins_policy" {
-#   name   = "jenkins-policy"
-#   policy = <<EOT
-# # Quyền đọc CHÍNH XÁC giá trị mật khẩu
-# path "secret/data/laravel/production" {
-#   capabilities = ["read"]
-# }
-#
-# # QUAN TRỌNG: Quyền đọc siêu dữ liệu (Metadata) để biết version nào là mới nhất
-# path "secret/metadata/laravel/production" {
-#   capabilities = ["read", "list"]
-# }
-# EOT
-# }
-
 resource "vault_policy" "jenkins_policy" {
   name   = "jenkins-policy"
-
   policy = <<EOT
-# CHO PHÉP TẤT CẢ (Để xem có vào được không)
-path "*" {
-  capabilities = ["read", "list"]
+# Quyền đọc CHÍNH XÁC giá trị mật khẩu
+path "secret/data/laravel/production" {
+  capabilities = ["read"]
 }
 
-# Hoặc nếu bạn muốn thử vận may với namespace admin
-path "admin/secret/data/*" {
+# QUAN TRỌNG: Quyền đọc siêu dữ liệu (Metadata) để biết version nào là mới nhất
+path "secret/metadata/laravel/production" {
   capabilities = ["read", "list"]
 }
 EOT
 }
+
+# resource "vault_policy" "jenkins_policy" {
+#   name   = "jenkins-policy"
+#
+#   policy = <<EOT
+# # CHO PHÉP TẤT CẢ (Để xem có vào được không)
+# path "*" {
+#   capabilities = ["read", "list"]
+# }
+#
+# # Hoặc nếu bạn muốn thử vận may với namespace admin
+# path "admin/secret/data/*" {
+#   capabilities = ["read", "list"]
+# }
+# EOT
+# }
 
 
 resource "vault_approle_auth_backend_role" "jenkins_role" {
@@ -131,9 +120,19 @@ resource "vault_kv_secret_v2" "laravel_prod" {
   name  = "laravel/production"  # <-- CHÚ Ý: Không gõ chữ "data/" vào đây nữa!
   
   data_json = jsonencode({
-    db_pass = var.db_password
-    ts_key  = var.tailscale_key
+    db_pass         = "REPLACE_ME_IN_VAULT_UI"
+    db_user         = "REPLACE_ME_IN_VAULT_UI"
+    db_name         = "REPLACE_ME_IN_VAULT_UI"
+    ts_key          = "REPLACE_ME_IN_VAULT_UI"
+    ssh_private_key = "REPLACE_ME_IN_VAULT_UI"
   })
+
+    # THẦN CHÚ: Giúp Terraform không bao giờ đè lên giá trị THẬT bạn đã sửa sau này
+  lifecycle {
+    ignore_changes = [
+      data_json,
+    ]
+  }
 }
 
 # --- OUTPUTS ---
