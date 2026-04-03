@@ -61,7 +61,7 @@ resource "vault_jwt_auth_backend_role" "tfc_role" {
   bound_audiences   = ["vault.workload.identity"]
   bound_claims_type = "glob"
   bound_claims = {
-    sub = "organization:${var.tfc_organization}:project:*:workspace:${var.tfc_workspace}:run_phase:*"
+    sub = "organization:${var.tfc_organization}:project:*:workspace:*:run_phase:*"
   }
   user_claim = "sub"
   role_type  = "jwt"
