@@ -123,8 +123,10 @@ resource "vault_kv_secret_v2" "laravel_prod" {
     db_pass         = "REPLACE_ME_IN_VAULT_UI"
     db_user         = "REPLACE_ME_IN_VAULT_UI"
     db_name         = "REPLACE_ME_IN_VAULT_UI"
-    ts_key          = "REPLACE_ME_IN_VAULT_UI"
-    ssh_private_key = "REPLACE_ME_IN_VAULT_UI"
+    ts_key          = "REPLACE_ME_IN_VAULT_UI" # Tailscale Auth Key (để join mạng)
+    ts_client_id    = "REPLACE_ME_IN_VAULT_UI" # Tailscale id cuar Auth Key ở trên
+    ssh_private_key = "REPLACE_ME_IN_VAULT_UI" # Private Key để clone code từ Git
+    ssh_key_ec2     = "REPLACE_ME_IN_VAULT_UI" # File .pem giúp ssh vào máy EC2
   })
 
     # THẦN CHÚ: Giúp Terraform không bao giờ đè lên giá trị THẬT bạn đã sửa sau này
