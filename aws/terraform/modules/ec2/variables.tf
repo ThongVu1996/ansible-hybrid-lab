@@ -25,11 +25,6 @@ variable "ts_auth_key" {
   sensitive   = true
 }
 
-variable "ts_client_id" {
-  description = "Id của Tailscale Auth Key"
-  type        = string
-}
-
 variable "host_name" {
   description = "Tên của máy ảo (MagicDNS) trong Tailscale"
   type        = string
