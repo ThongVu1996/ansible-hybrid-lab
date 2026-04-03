@@ -21,7 +21,7 @@ fi
 # 4. Cài đặt Tailscale và Join mạng
 # Đây là bước duy nhất nên làm ở Terraform để Ansible có thể SSH qua IP Tailscale ngay lập tức
 curl -fsSL https://tailscale.com/install.sh | sh
-tailscale up --authkey=${TS_KEY} --hostname=aws-web-server --ssh --accept-dns=true --advertise-tags=tag:webserver
+tailscale up --authkey=${TS_KEY} --hostname=${HOST_NAME} --ssh --accept-dns=true --advertise-tags=tag:webserver
 
 # 5. Cấu hình SSH Deploy Key (Để Ansible có thể dùng quyền root để clone code thuận tiện)
 mkdir -p /root/.ssh

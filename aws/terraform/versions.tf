@@ -1,5 +1,4 @@
 terraform {
-  # 1. Kết nối lên HCP Terraform
   cloud {
     organization = "tonytechlab-group"
     workspaces {
@@ -13,6 +12,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    vault = {
+      source  = "hashicorp/vault"
+      version = "~> 3.0"
     }
   }
 }

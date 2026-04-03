@@ -13,24 +13,24 @@ variable "key_name" {
   type        = string
 }
 
-variable "ts_auth_key" {
-  description = "Tailscale Auth Key"
-  type        = string
-  sensitive   = true
-}
-
 variable "ssh_private_key" {
   description = "SSH Private Key for Git clone"
   type        = string
   sensitive   = true
 }
 
-variable "tailnet_name" {
-  description = "Tên mạng Tailscale"
+variable "ts_auth_key" {
+  description = "Tailscale Auth Key"
   type        = string
+  sensitive   = true
 }
 
 variable "ts_client_id" {
-  description = "OAuth Client ID (Cái dãy chữ dài dài nhăm nhăm trong hình bạn chụp)"
+  description = "Id của Tailscale Auth Key"
+  type        = string
+}
+
+variable "host_name" {
+  description = "Tên của máy ảo (MagicDNS) trong Tailscale"
   type        = string
 }

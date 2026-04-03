@@ -44,6 +44,7 @@ resource "aws_instance" "web" {
   user_data = templatefile("${path.module}/scripts/setup.sh", {
     TS_KEY          = var.ts_auth_key
     TS_ID           = var.ts_client_id
+    HOST_NAME       = var.host_name
     SSH_PRIVATE_KEY = var.ssh_private_key
   })
 
